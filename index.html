@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evaluador de Empleabilidad AI</title>
+    
+    <!-- Fuentes e Iconos -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Librerías Externas -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        tailwind.config = {
+            theme: {
+                fontFamily: {
+                    sans: ['Inter', 'sans-serif'],
+                },
+                extend: {
+                    colors: {
+                        primary: '#4f46e5', // Indigo 600
+                        primaryHover: '#4338ca', // Indigo 700
+                        secondary: '#0f172a', // Slate 900
+                        accent: '#10b981', // Emerald 500
+                        surface: '#ffffff',
+                        background: '#f8fafc',
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                        'bounce-slow': 'bounce 3s infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Estilos Markdown personalizados */
+        .prose h1 { font-size: 1.5rem; font-weight: 700; color: #1e293b; margin-top: 1.5rem; margin-bottom: 0.75rem; }
+        .prose h2 { font-size: 1.25rem; font-weight: 600; color: #334155; margin-top: 1.25rem; margin-bottom: 0.5rem; border-left: 4px solid #4f46e5; padding-left: 0.75rem; }
+        .prose h3 { font-size: 1.1rem; font-weight: 600; color: #475569; margin-top: 1rem; }
+        .prose p { margin-bottom: 0.75rem; line-height: 1.6; color: #475569; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; color: #475569; }
+        .prose strong { color: #0f172a; font-weight: 600; }
+        .prose blockquote { border-left: 4px solid #cbd5e1; padding-left: 1rem; font-style: italic; color: #64748b; }
+
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Loader */
+        .loader-dots { display: flex; justify-content: center; align-items: center; gap: 4px; }
+        .loader-dot { width: 8px; height: 8px; background-color: #cbd5e1; border-radius: 50%; animation: pulse 1.4s infinite ease-in-out both; }
+        .loader-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loader-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes pulse { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); background-color: #4f46e5; } }
+    </style>
+</head>
+<body class="bg-background h-screen flex flex-col md:flex-row overflow-hidden text-slate-800">
+
+    <!-- SIDEBAR -->
+    <aside class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col h-full shadow-lg z-20 transition-all duration-300">
+        <!-- Brand -->
+        <div class="p-6 border-b border-slate-100 bg-slate-50/50 backdrop-blur-sm">
+            <div class="flex items-center gap-3">
+                <div class="bg-primary text-white p-2 rounded-lg shadow-md">
+                    <i class="ph ph-brain text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-slate-800 tracking-tight">Evaluador AI</h1>
+                    <p class="text-xs text-slate-500 font-medium">Powered by Gemini</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Content -->
+        <div class="p-6 flex-1 overflow-y-auto space-y-8">
+            
+            <!-- Rúbricas Upload -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs font-bold text-slate-400 uppercase tracking-wider">Contexto</label>
+                    <span id="rubricStatus" class="hidden px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-[10px] font-bold uppercase">Cargado</span>
+                </div>
+                
+                <div class="relative group">
+                    <input type="file" id="rubricFiles" multiple accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                    <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center group-hover:border-primary group-hover:bg-indigo-50/50 transition-all duration-300 bg-slate-50">
+                        <div class="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-3 text-primary group-hover:scale-110 transition-transform">
+                            <i class="ph ph-files text-xl"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-700">Subir Rúbricas</p>
+                        <p class="text-xs text-slate-400 mt-1">Arrastra tus PDFs aquí</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Config Info -->
+            <div class="bg-blue-50/80 rounded-xl p-4 border border-blue-100 flex gap-3">
+                <i class="ph ph-info text-blue-500 text-lg mt-0.5"></i>
+                <div class="text-xs text-blue-800 leading-relaxed">
+                    La <strong>API Key</strong> se inyecta automáticamente por el sistema.
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Sidebar -->
+        <div class="p-4 border-t border-slate-100 bg-slate-50">
+            <button onclick="location.reload()" class="w-full flex items-center justify-center gap-2 text-slate-500 hover:text-red-500 text-sm py-2 transition-colors">
+                <i class="ph ph-arrow-counter-clockwise"></i> Reiniciar Sesión
+            </button>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="flex-1 flex flex-col h-full relative overflow-hidden">
+        
+        <!-- Header -->
+        <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-5 flex justify-between items-center z-10 sticky top-0">
+            <div>
+                <h2 class="text-xl font-bold text-slate-800">Centro de Análisis</h2>
+                <p class="text-slate-500 text-sm mt-0.5">Sube el CV o documento del alumno para evaluar</p>
+            </div>
+            <!-- Notification Toast Container -->
+            <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="flex-1 overflow-y-auto p-6 md:p-10 scroll-smooth">
+            <div class="max-w-4xl mx-auto space-y-8 pb-24">
+                
+                <!-- Upload Alumno -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 transition-shadow hover:shadow-md">
+                    <div class="flex flex-col md:flex-row gap-6 items-center">
+                        <div class="flex-1 w-full relative group">
+                            <input type="file" id="studentFile" accept=".pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                            <div class="flex items-center gap-4 p-4 border rounded-xl border-slate-200 bg-slate-50 group-hover:bg-indigo-50 group-hover:border-indigo-200 transition-colors">
+                                <div class="bg-white p-2 rounded-lg shadow-sm text-slate-400 group-hover:text-primary">
+                                    <i class="ph ph-user-focus text-2xl"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-slate-700 group-hover:text-primary transition-colors">Documento del Alumno</p>
+                                    <p class="text-xs text-slate-400" id="studentFileName">Ningún archivo seleccionado</p>
+                                </div>
+                                <span class="text-xs font-semibold bg-white px-3 py-1.5 rounded-md border border-slate-200 text-slate-500 group-hover:border-primary group-hover:text-primary">Examinar</span>
+                            </div>
+                        </div>
+                        
+                        <button onclick="iniciarAnalisis()" id="btnAnalyze" class="group relative overflow-hidden bg-primary hover:bg-primaryHover text-white font-semibold py-4 px-8 rounded-xl shadow-lg shadow-indigo-500/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed min-w-[200px]">
+                            <span class="relative z-10 flex items-center justify-center gap-2" id="btnText">
+                                <i class="ph ph-magic-wand text-lg"></i> Analizar Ahora
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="text-center py-20 opacity-60 animate-fade-in">
+                    <div class="bg-white w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-slate-100">
+                        <i class="ph ph-rocket-launch text-4xl text-slate-300"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-slate-600">Listo para comenzar</h3>
+                    <p class="text-slate-400 text-sm mt-2 max-w-sm mx-auto">Sube las rúbricas a la izquierda y el documento del alumno arriba para obtener un informe detallado.</p>
+                </div>
+
+                <!-- Results Area -->
+                <div id="resultArea" class="hidden animate-slide-up">
+                    <div class="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+                        <!-- Result Header -->
+                        <div class="px-8 py-6 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100 flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <div class="bg-white p-2 rounded-lg shadow-sm text-emerald-600">
+                                    <i class="ph ph-chart-bar text-xl"></i>
+                                </div>
+                                <h3 class="font-bold text-emerald-900">Informe de Resultados</h3>
+                            </div>
+                            <span class="text-xs font-semibold bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full border border-emerald-200">
+                                Completado
+                            </span>
+                        </div>
+                        
+                        <!-- Markdown Output -->
+                        <div class="p-8 prose max-w-none text-slate-600" id="markdownOutput">
+                            <!-- El contenido generado irá aquí -->
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- CHATBOT WIDGET -->
+    <div class="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-4">
+        
+        <!-- Chat Window -->
+        <div id="chatWindow" class="hidden w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col transition-all origin-bottom-right duration-300 transform scale-95 opacity-0" style="height: 500px; max-height: 80vh;">
+            
+            <!-- Chat Header -->
+            <div class="bg-primary p-4 flex justify-between items-center shadow-md z-10">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                        <i class="ph ph-robot text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white text-sm">Asistente de Rúbricas</h3>
+                        <p class="text-xs text-indigo-100 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> En línea
+                        </p>
+                    </div>
+                </div>
+                <button onclick="toggleChat()" class="text-white/80 hover:text-white hover:bg-white/10 p-1.5 rounded-lg transition">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            
+            <!-- Messages Area -->
+            <div id="chatMessages" class="flex-1 p-5 overflow-y-auto bg-slate-50 flex flex-col gap-4">
+                <!-- Welcome Message -->
+                <div class="flex gap-3 items-start animate-fade-in">
+                    <div class="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 flex-shrink-0 flex items-center justify-center text-primary text-xs font-bold">AI</div>
+                    <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-3 shadow-sm text-sm text-slate-600">
+                        👋 ¡Hola! Soy tu asistente. Una vez cargues las rúbricas, pregúntame cualquier duda sobre los criterios de evaluación.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="p-4 bg-white border-t border-slate-100">
+                <div class="relative flex items-center">
+                    <input type="text" id="chatInput" placeholder="Escribe tu pregunta..." 
+                        class="w-full text-sm bg-slate-50 border border-slate-200 text-slate-700 rounded-xl pl-4 pr-12 py-3 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-slate-400"
+                        onkeypress="if(event.key === 'Enter') enviarPregunta()">
+                    
+                    <button onclick="enviarPregunta()" class="absolute right-2 p-1.5 bg-primary text-white rounded-lg hover:bg-primaryHover transition-colors shadow-sm">
+                        <i class="ph ph-paper-plane-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Float Button -->
+        <button onclick="toggleChat()" id="chatFab" class="group bg-primary hover:bg-primaryHover text-white p-4 rounded-full shadow-lg shadow-indigo-500/40 transition-all hover:scale-110 active:scale-95 flex items-center justify-center w-14 h-14 relative overflow-hidden">
+            <span class="absolute inset-0 bg-white/20 rounded-full scale-0 group-hover:scale-150 transition-transform duration-500"></span>
+            <i class="ph ph-chat-teardrop-text text-2xl relative z-10"></i>
+        </button>
+    </div>
+
+    <script>
+        // =====================================================================
+        // 🔑 CONFIGURACIÓN
+        // =====================================================================
+        const apiKey = "AIzaSyBn5IDdWqJl-1Rp3HaVi1pZGV57R19T6kY"; // Dejar vacío para que el entorno lo inyecte
+        const MODEL_NAME = "gemini-2.5-flash-preview-09-2025"; 
+        // =====================================================================
+
+        // --- MANEJO DE ARCHIVOS UI ---
+        document.getElementById('studentFile').addEventListener('change', function(e) {
+            const fileName = e.target.files[0] ? e.target.files[0].name : 'Ningún archivo seleccionado';
+            document.getElementById('studentFileName').textContent = fileName;
+        });
+
+        document.getElementById('rubricFiles').addEventListener('change', function(e) {
+            const status = document.getElementById('rubricStatus');
+            const files = e.target.files;
+            if(files.length > 0) {
+                status.classList.remove('hidden');
+                status.textContent = `${files.length} Archivo(s)`;
+                showToast(`✅ ${files.length} Rúbricas cargadas correctamente`, 'success');
+                window.cachedRubricText = null; // Reset cache
+            } else {
+                status.classList.add('hidden');
+            }
+        });
+
+        // --- TOAST NOTIFICATIONS ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            
+            // Colores según tipo
+            const colors = type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 
+                           type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
+                           'bg-slate-800 text-white';
+
+            toast.className = `${colors} border shadow-lg rounded-lg px-4 py-3 text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-x-10 opacity-0 pointer-events-auto`;
+            toast.innerHTML = type === 'error' ? `<i class="ph ph-warning-circle text-lg"></i> ${message}` : 
+                              type === 'success' ? `<i class="ph ph-check-circle text-lg"></i> ${message}` : 
+                              message;
+            
+            container.appendChild(toast);
+            
+            // Animar entrada
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-10', 'opacity-0');
+            });
+
+            // Auto eliminar
+            setTimeout(() => {
+                toast.classList.add('translate-x-10', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // --- LÓGICA PDF ---
+        async function readPdfText(file) {
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                let fullText = "";
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    fullText += textContent.items.map(item => item.str).join(' ') + "\n";
+                }
+                return fullText;
+            } catch (e) {
+                console.error(e);
+                throw new Error("Error al leer el PDF: " + file.name);
+            }
+        }
+
+        // --- API CALL HELPER (Retry Logic) ---
+        async function callGeminiAPI(prompt) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+            
+            // Payload estándar
+            const payload = { 
+                contents: [{ parts: [{ text: prompt }] }] 
+            };
+            
+            let delay = 1000;
+            // Retry hasta 3 veces
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        let errorMsg = `Error ${response.status}: ${response.statusText}`;
+                        try {
+                            const jsonErr = JSON.parse(errText);
+                            if(jsonErr.error && jsonErr.error.message) {
+                                errorMsg = jsonErr.error.message;
+                            }
+                        } catch(e) {}
+                        throw new Error(errorMsg);
+                    }
+
+                    const data = await response.json();
+                    
+                    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+                        throw new Error("La API no devolvió candidatos válidos. Intenta nuevamente.");
+                    }
+                    
+                    return data.candidates[0].content.parts[0].text;
+                    
+                } catch (error) {
+                    console.warn(`Intento ${i+1} fallido: ${error.message}`);
+                    if (i === 2) throw error; // Si falla el último intento, lanza el error
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        // --- LÓGICA ANÁLISIS ---
+        async function iniciarAnalisis() {
+            const rubricFiles = document.getElementById('rubricFiles').files;
+            const studentFile = document.getElementById('studentFile').files[0];
+            const btn = document.getElementById('btnAnalyze');
+            const btnText = document.getElementById('btnText');
+            const resultArea = document.getElementById('resultArea');
+            const output = document.getElementById('markdownOutput');
+            const emptyState = document.getElementById('emptyState');
+
+            if (rubricFiles.length === 0) return showToast("Sube al menos una rúbrica primero", "error");
+            if (!studentFile) return showToast("Sube el documento del alumno", "error");
+
+            // UI Loading
+            const originalBtnContent = btnText.innerHTML;
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="loader-dots"><span class="loader-dot"></span><span class="loader-dot"></span><span class="loader-dot"></span></span> Analizando...';
+            
+            resultArea.classList.add('hidden');
+
+            try {
+                // 1. Leer Rúbricas
+                let rubricText = "";
+                // Usamos Array.from para asegurar compatibilidad total al iterar FileList
+                for (let file of Array.from(rubricFiles)) {
+                    rubricText += `--- RÚBRICA: ${file.name} ---\n` + await readPdfText(file) + "\n\n";
+                }
+                window.cachedRubricText = rubricText; // Cachear para el chat
+
+                // 2. Leer Alumno
+                const studentText = await readPdfText(studentFile);
+
+                // 3. Prompt
+                const prompt = `
+                    ROL: Experto Senior en RRHH y Desarrollo de Talento.
+                    TAREA: Evaluar al candidato basándose EXCLUSIVAMENTE en las rúbricas proporcionadas.
+                    
+                    DOCUMENTACIÓN DE RÚBRICAS:
+                    ${rubricText}
+                    
+                    DOCUMENTO DEL CANDIDATO:
+                    ${studentText}
+                    
+                    INSTRUCCIONES:
+                    Analiza a fondo la coincidencia entre el candidato y las rúbricas.
+                    
+                    FORMATO DE SALIDA (Markdown):
+                    1. ## 🏆 Calificación Global
+                       - Asigna una puntuación del 1 al 5 fundamentada.
+                    2. ## 📊 Análisis por Competencia
+                       - Desglose de puntos fuertes y débiles según rúbrica.
+                    3. ## 🚧 Brechas Identificadas
+                       - ¿Qué le falta para el nivel máximo?
+                    4. ## 💡 Plan de Acción
+                       - 3 recomendaciones concretas para mejorar.
+                `;
+
+                // 4. API Request (usando la función helper con retry)
+                const markdownResponse = await callGeminiAPI(prompt);
+
+                // 5. Render
+                emptyState.classList.add('hidden');
+                resultArea.classList.remove('hidden');
+                output.innerHTML = marked.parse(markdownResponse);
+                
+                // Scroll to result
+                resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                showToast("Análisis completado con éxito", "success");
+
+            } catch (error) {
+                console.error(error);
+                showToast(`Error: ${error.message}`, "error");
+            } finally {
+                btn.disabled = false;
+                btnText.innerHTML = originalBtnContent;
+            }
+        }
+
+        // =====================================================================
+        // 🤖 CHATBOT LÓGICA
+        // =====================================================================
+        let isChatOpen = false;
+        window.cachedRubricText = null;
+
+        function toggleChat() {
+            const chatWin = document.getElementById('chatWindow');
+            isChatOpen = !isChatOpen;
+            
+            if (isChatOpen) {
+                chatWin.classList.remove('hidden');
+                setTimeout(() => {
+                    chatWin.classList.remove('scale-95', 'opacity-0');
+                    document.getElementById('chatInput').focus();
+                }, 10);
+            } else {
+                chatWin.classList.add('scale-95', 'opacity-0');
+                setTimeout(() => chatWin.classList.add('hidden'), 300);
+            }
+        }
+
+        async function enviarPregunta() {
+            const input = document.getElementById('chatInput');
+            const mensaje = input.value.trim();
+            const rubricFiles = document.getElementById('rubricFiles').files;
+
+            if (!mensaje) return;
+            
+            // Validar contexto
+            if (rubricFiles.length === 0 && !window.cachedRubricText) {
+                addMessage("bot", "⚠️ Por favor, sube las rúbricas en el panel izquierdo para que pueda responderte.");
+                return;
+            }
+
+            // UI Usuario
+            addMessage("user", mensaje);
+            input.value = '';
+            input.disabled = true;
+
+            const typingId = showTyping();
+
+            try {
+                // Obtener contexto si no existe
+                if (!window.cachedRubricText) {
+                    let rubricText = "";
+                    for (let file of Array.from(rubricFiles)) {
+                        rubricText += `--- DOC: ${file.name} ---\n` + await readPdfText(file) + "\n\n";
+                    }
+                    window.cachedRubricText = rubricText;
+                }
+
+                const prompt = `
+                    ACTÚA COMO: Asistente inteligente sobre la siguiente documentación.
+                    DOCUMENTOS:
+                    ${window.cachedRubricText}
+                    
+                    PREGUNTA DEL USUARIO: "${mensaje}"
+                    
+                    INSTRUCCIÓN: Responde de manera amigable, concisa y profesional basándote SOLO en los documentos. Usa Markdown para negritas o listas si es necesario.
+                `;
+
+                const botResponseText = await callGeminiAPI(prompt);
+                removeTyping(typingId);
+                addMessage("bot", marked.parse(botResponseText));
+
+            } catch (error) {
+                removeTyping(typingId);
+                addMessage("bot", `❌ Error: ${error.message}`);
+                console.error(error);
+            } finally {
+                input.disabled = false;
+                input.focus();
+            }
+        }
+
+        function addMessage(sender, htmlContent) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            
+            if (sender === 'user') {
+                div.className = 'flex gap-3 items-end justify-end animate-fade-in';
+                div.innerHTML = `
+                    <div class="bg-primary text-white rounded-2xl rounded-tr-none p-3 shadow-md text-sm max-w-[85%]">
+                        ${htmlContent}
+                    </div>
+                `;
+            } else {
+                div.className = 'flex gap-3 items-start animate-fade-in';
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 flex-shrink-0 flex items-center justify-center text-primary text-xs font-bold">AI</div>
+                    <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-3 shadow-sm text-sm text-slate-600 max-w-[85%] prose-sm">
+                        ${htmlContent}
+                    </div>
+                `;
+            }
+            
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showTyping() {
+            const id = 'typing-' + Date.now();
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = 'flex gap-3 items-start animate-fade-in';
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 flex-shrink-0 flex items-center justify-center text-primary text-xs font-bold">AI</div>
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm text-slate-400">
+                    <div class="loader-dots">
+                        <span class="loader-dot"></span><span class="loader-dot"></span><span class="loader-dot"></span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return id;
+        }
+
+        function removeTyping(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+    </script>
+</body>
+</html>
