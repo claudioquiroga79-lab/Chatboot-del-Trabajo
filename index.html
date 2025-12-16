@@ -59,6 +59,27 @@
         .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; color: #475569; }
         .prose strong { color: #0f172a; font-weight: 600; }
         .prose blockquote { border-left: 4px solid #cbd5e1; padding-left: 1rem; font-style: italic; color: #64748b; }
+        
+        /* Botones de opción en el chat */
+        .chat-option-btn {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 8px 12px;
+            margin: 4px 0;
+            background-color: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            color: #475569;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .chat-option-btn:hover {
+            background-color: #e0e7ff;
+            border-color: #6366f1;
+            color: #4338ca;
+        }
 
         /* Scrollbar personalizada */
         ::-webkit-scrollbar { width: 6px; }
@@ -107,7 +128,7 @@
                         <div class="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center mx-auto mb-3 text-primary group-hover:scale-110 transition-transform">
                             <i class="ph ph-files text-xl"></i>
                         </div>
-                        <p class="text-sm font-medium text-slate-700">Subir Rúbricas</p>
+                        <p class="text-sm font-medium text-slate-700">Subir Bibliografía</p>
                         <p class="text-xs text-slate-400 mt-1">Arrastra tus PDFs aquí</p>
                     </div>
                 </div>
@@ -212,7 +233,7 @@
     <div class="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-4">
         
         <!-- Chat Window -->
-        <div id="chatWindow" class="hidden w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col transition-all origin-bottom-right duration-300 transform scale-95 opacity-0" style="height: 500px; max-height: 80vh;">
+        <div id="chatWindow" class="hidden w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col transition-all origin-bottom-right duration-300 transform scale-95 opacity-0" style="height: 550px; max-height: 80vh;">
             
             <!-- Chat Header -->
             <div class="bg-primary p-4 flex justify-between items-center shadow-md z-10">
@@ -221,7 +242,7 @@
                         <i class="ph ph-robot text-white text-lg"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-white text-sm">Asistente de Rúbricas</h3>
+                        <h3 class="font-bold text-white text-sm">Asistente Virtual</h3>
                         <p class="text-xs text-indigo-100 flex items-center gap-1">
                             <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> En línea
                         </p>
@@ -234,11 +255,25 @@
             
             <!-- Messages Area -->
             <div id="chatMessages" class="flex-1 p-5 overflow-y-auto bg-slate-50 flex flex-col gap-4">
-                <!-- Welcome Message -->
+                <!-- Welcome Message (Updated) -->
                 <div class="flex gap-3 items-start animate-fade-in">
                     <div class="w-8 h-8 rounded-full bg-indigo-100 border border-indigo-200 flex-shrink-0 flex items-center justify-center text-primary text-xs font-bold">AI</div>
-                    <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-3 shadow-sm text-sm text-slate-600">
-                        👋 ¡Hola! Soy tu asistente. Una vez cargues las rúbricas, pregúntame cualquier duda sobre los criterios de evaluación.
+                    <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm text-sm text-slate-600 w-full">
+                        <p class="mb-2">¡Hola! 👋 Bienvenido/a a tu asistente virtual para la búsqueda de empleo.</p>
+                        <p class="mb-3">Estoy aquí para ayudarte, ya sea que necesites consejos sobre cómo destacar tus habilidades o quieras practicar tus respuestas en una entrevista, ¡has llegado al lugar correcto!</p>
+                        <p class="font-semibold mb-2">¿Cómo te gustaría empezar hoy?</p>
+                        
+                        <button onclick="sendOption('Quiero mejorar mi CV')" class="chat-option-btn">
+                            1. Mejorar tu CV
+                        </button>
+                        <button onclick="sendOption('Quiero redactar una carta de presentación')" class="chat-option-btn">
+                            2. Redactar una carta de presentación
+                        </button>
+                        <button onclick="sendOption('Quiero simular una entrevista')" class="chat-option-btn">
+                            3. Simular una entrevista
+                        </button>
+                        
+                        <p class="mt-3 text-xs text-slate-400 italic">¡Hablemos de tu futuro profesional!</p>
                     </div>
                 </div>
             </div>
@@ -268,7 +303,7 @@
         // =====================================================================
         // 🔑 CONFIGURACIÓN
         // =====================================================================
-        const apiKey = "AIzaSyBn5IDdWqJl-1Rp3HaVi1pZGV57R19T6kY"; // Dejar vacío para que el entorno lo inyecte
+        const apiKey = "AIzaSyBn5IDdWqJl-1Rp3HaVi1pZGV57R19T6kY"; // El sistema la inyectará automáticamente
         const MODEL_NAME = "gemini-2.5-flash-preview-09-2025"; 
         // =====================================================================
 
@@ -284,7 +319,7 @@
             if(files.length > 0) {
                 status.classList.remove('hidden');
                 status.textContent = `${files.length} Archivo(s)`;
-                showToast(`✅ ${files.length} Rúbricas cargadas correctamente`, 'success');
+                showToast(`✅ ${files.length} Documentos cargadas correctamente`, 'success');
                 window.cachedRubricText = null; // Reset cache
             } else {
                 status.classList.add('hidden');
@@ -342,13 +377,11 @@
         async function callGeminiAPI(prompt) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
             
-            // Payload estándar
             const payload = { 
                 contents: [{ parts: [{ text: prompt }] }] 
             };
             
             let delay = 1000;
-            // Retry hasta 3 veces
             for (let i = 0; i < 3; i++) {
                 try {
                     const response = await fetch(url, {
@@ -372,14 +405,14 @@
                     const data = await response.json();
                     
                     if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-                        throw new Error("La API no devolvió candidatos válidos. Intenta nuevamente.");
+                        throw new Error("La API no devolvió candidatos válidos.");
                     }
                     
                     return data.candidates[0].content.parts[0].text;
                     
                 } catch (error) {
                     console.warn(`Intento ${i+1} fallido: ${error.message}`);
-                    if (i === 2) throw error; // Si falla el último intento, lanza el error
+                    if (i === 2) throw error;
                     await new Promise(resolve => setTimeout(resolve, delay));
                     delay *= 2;
                 }
@@ -399,7 +432,6 @@
             if (rubricFiles.length === 0) return showToast("Sube al menos una rúbrica primero", "error");
             if (!studentFile) return showToast("Sube el documento del alumno", "error");
 
-            // UI Loading
             const originalBtnContent = btnText.innerHTML;
             btn.disabled = true;
             btnText.innerHTML = '<span class="loader-dots"><span class="loader-dot"></span><span class="loader-dot"></span><span class="loader-dot"></span></span> Analizando...';
@@ -407,18 +439,17 @@
             resultArea.classList.add('hidden');
 
             try {
-                // 1. Leer Rúbricas
+                // Leer Rúbricas
                 let rubricText = "";
-                // Usamos Array.from para asegurar compatibilidad total al iterar FileList
                 for (let file of Array.from(rubricFiles)) {
                     rubricText += `--- RÚBRICA: ${file.name} ---\n` + await readPdfText(file) + "\n\n";
                 }
-                window.cachedRubricText = rubricText; // Cachear para el chat
+                window.cachedRubricText = rubricText;
 
-                // 2. Leer Alumno
+                // Leer Alumno
                 const studentText = await readPdfText(studentFile);
 
-                // 3. Prompt
+                // Prompt
                 const prompt = `
                     ROL: Experto Senior en RRHH y Desarrollo de Talento.
                     TAREA: Evaluar al candidato basándose EXCLUSIVAMENTE en las rúbricas proporcionadas.
@@ -443,15 +474,12 @@
                        - 3 recomendaciones concretas para mejorar.
                 `;
 
-                // 4. API Request (usando la función helper con retry)
                 const markdownResponse = await callGeminiAPI(prompt);
 
-                // 5. Render
                 emptyState.classList.add('hidden');
                 resultArea.classList.remove('hidden');
                 output.innerHTML = marked.parse(markdownResponse);
                 
-                // Scroll to result
                 resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 showToast("Análisis completado con éxito", "success");
 
@@ -465,7 +493,7 @@
         }
 
         // =====================================================================
-        // 🤖 CHATBOT LÓGICA
+        // 🤖 CHATBOT LÓGICA (ACTUALIZADA)
         // =====================================================================
         let isChatOpen = false;
         window.cachedRubricText = null;
@@ -486,18 +514,20 @@
             }
         }
 
+        // Nueva función para manejar clics en opciones
+        function sendOption(text) {
+            const input = document.getElementById('chatInput');
+            input.value = text;
+            enviarPregunta();
+        }
+
         async function enviarPregunta() {
             const input = document.getElementById('chatInput');
             const mensaje = input.value.trim();
             const rubricFiles = document.getElementById('rubricFiles').files;
+            const studentFile = document.getElementById('studentFile').files[0];
 
             if (!mensaje) return;
-            
-            // Validar contexto
-            if (rubricFiles.length === 0 && !window.cachedRubricText) {
-                addMessage("bot", "⚠️ Por favor, sube las rúbricas en el panel izquierdo para que pueda responderte.");
-                return;
-            }
 
             // UI Usuario
             addMessage("user", mensaje);
@@ -507,24 +537,72 @@
             const typingId = showTyping();
 
             try {
-                // Obtener contexto si no existe
-                if (!window.cachedRubricText) {
-                    let rubricText = "";
+                // Preparar contexto (Rúbricas y/o CV del alumno)
+                let contextText = "";
+                let hasContext = false;
+
+                // 1. Obtener texto de rúbricas si existen
+                if (!window.cachedRubricText && rubricFiles.length > 0) {
+                    let rText = "";
                     for (let file of Array.from(rubricFiles)) {
-                        rubricText += `--- DOC: ${file.name} ---\n` + await readPdfText(file) + "\n\n";
+                        rText += `--- RUBRICA/CONTEXTO: ${file.name} ---\n` + await readPdfText(file) + "\n\n";
                     }
-                    window.cachedRubricText = rubricText;
+                    window.cachedRubricText = rText;
+                }
+                
+                if (window.cachedRubricText) {
+                    contextText += window.cachedRubricText;
+                    hasContext = true;
                 }
 
-                const prompt = `
-                    ACTÚA COMO: Asistente inteligente sobre la siguiente documentación.
-                    DOCUMENTOS:
-                    ${window.cachedRubricText}
-                    
-                    PREGUNTA DEL USUARIO: "${mensaje}"
-                    
-                    INSTRUCCIÓN: Responde de manera amigable, concisa y profesional basándote SOLO en los documentos. Usa Markdown para negritas o listas si es necesario.
-                `;
+                // 2. Obtener texto del CV del alumno si existe (útil para la opción 1 y 2)
+                if (studentFile) {
+                    // Nota: Si el archivo es grande, leerlo cada vez puede ser lento. 
+                    // En producción idealmente se cachea también.
+                    const sText = await readPdfText(studentFile);
+                    contextText += `\n--- CV DEL CANDIDATO ACTUAL: ${studentFile.name} ---\n` + sText + "\n";
+                    hasContext = true;
+                }
+
+                // Construcción del Prompt Inteligente
+                let prompt = "";
+
+                if (hasContext) {
+                    // Modo con Contexto: Usa los archivos cargados
+                    prompt = `
+                        ACTÚA COMO: Un experto Consultor de Carrera y Reclutador Senior (Coach de Empleabilidad).
+                        
+                        CONTEXTO DISPONIBLE (Rúbricas, CV, etc.):
+                        ${contextText}
+                        
+                        USUARIO DICE: "${mensaje}"
+                        
+                        INSTRUCCIONES:
+                        1. Si el usuario pide "Mejorar CV", analiza su CV contra las rúbricas (si hay) y da feedback crítico. Si no hay CV cargado, pídelo amablemente.
+                        2. Si pide "Carta de Presentación", redacta un borrador profesional usando la info del CV (si hay) y alineado a las rúbricas.
+                        3. Si pide "Simular Entrevista", inicia un roleplay. Haz UNA pregunta de entrevista difícil basada en su perfil. Espera su respuesta.
+                        4. Para otras consultas, responde basándote estrictamente en la documentación cargada.
+                        
+                        TONO: Profesional, motivador y directo. Usa formato Markdown.
+                    `;
+                } else {
+                    // Modo General: Sin archivos cargados
+                    prompt = `
+                        ACTÚA COMO: Un experto Consultor de Carrera y Reclutador Senior.
+                        
+                        USUARIO DICE: "${mensaje}"
+                        
+                        SITUACIÓN: El usuario NO ha cargado documentos (CV ni Rúbricas) todavía en el sistema.
+                        
+                        INSTRUCCIONES:
+                        - Responde a su consulta de forma general pero experta.
+                        - Si pide mejorar su CV, dale 3 consejos universales de alto impacto y sugiérele cargar su PDF en el panel principal para un análisis personalizado.
+                        - Si pide carta de presentación, pregúntale para qué puesto es y qué experiencia clave quiere resaltar.
+                        - Si pide simular entrevista, comienza haciéndole una pregunta clásica como "Háblame de ti" o "¿Cuál es tu mayor debilidad?".
+                        
+                        TONO: Amigable, servicial y experto. Usa Markdown.
+                    `;
+                }
 
                 const botResponseText = await callGeminiAPI(prompt);
                 removeTyping(typingId);
@@ -532,7 +610,7 @@
 
             } catch (error) {
                 removeTyping(typingId);
-                addMessage("bot", `❌ Error: ${error.message}`);
+                addMessage("bot", `❌ Error al procesar: ${error.message}`);
                 console.error(error);
             } finally {
                 input.disabled = false;
